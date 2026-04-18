@@ -69,16 +69,20 @@ export function VirtualDataTable({ rows }: Props) {
                   height: vr.size,
                 }}
               >
-                {virtualCols.map((vc) => (
-                  <div
-                    key={vc.key}
-                    className={`vt-cell vt-body-cell ${vr.index % 2 === 1 ? "vt-body-cell--alt" : ""}`}
-                    style={colCell(vc, vr.size)}
-                    title={rows[vr.index]?.[vc.index]}
-                  >
-                    {rows[vr.index]?.[vc.index]}
-                  </div>
-                ))}
+                {virtualCols.map((vc) => {
+                  const colId = COLUMNS[vc.index]?.id;
+                  const text = colId ? rows[vr.index]?.[colId] : undefined;
+                  return (
+                    <div
+                      key={vc.key}
+                      className={`vt-cell vt-body-cell ${vr.index % 2 === 1 ? "vt-body-cell--alt" : ""}`}
+                      style={colCell(vc, vr.size)}
+                      title={text}
+                    >
+                      {text}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

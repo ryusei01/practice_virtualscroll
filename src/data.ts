@@ -1,9 +1,11 @@
-/** 行数（列数は COLUMNS の長さ） */
+/**
+ * 仮想スクロール表向けデモ用グリッド（5000行 × 100 列）。
+ * セルは「固定のベース文字列 + 行インデックス i」または 20+i 系の数値文字列。
+ */
+/** データ行数。列数は COL_COUNT（COLUMNS.length） */
 export const ROW_COUNT = 5000;
 
-export type Row = string[];
-
-/** セル値の生成に使う項目種別 */
+/** cellValue の switch で参照する値の系統 */
 export type ColumnKind =
   | "equipId"
   | "assetNo"
@@ -33,18 +35,15 @@ export type ColumnKind =
   | "uuid";
 
 export type ColumnSpec = {
-  /** システム内部キー（英字） */
   id: string;
-  /** 画面上の項目名 */
   label: string;
   kind: ColumnKind;
 };
 
 /**
- * 100項目: 工場設備の識別・属性・稼働・保全・組織・所在地など、
- * 実務でありそうなマスタ列を想定（値はデモ用の決定論的生成）。
+ * 100 項目の列定義（ヘッダ表示用ラベルと kind のみ使用。セル値は cellValue で統一ルール生成）。
  */
-export const COLUMNS: ColumnSpec[] = [
+export const COLUMNS = [
   { id: "equipment_mgmt_no", label: "設備管理番号", kind: "equipId" },
   { id: "asset_tag", label: "資産タグ", kind: "assetNo" },
   { id: "serial_no", label: "製造番号", kind: "serial" },
@@ -116,7 +115,7 @@ export const COLUMNS: ColumnSpec[] = [
   { id: "torque_nm", label: "トルク(N·m)", kind: "decimal1" },
   { id: "noise_db", label: "騒音(dB)", kind: "int" },
   { id: "lot_no", label: "ロット番号", kind: "code" },
-  { id: "work_order_no", label: "作業指図番号", kind: "code" },
+  { id: "work_order_no", label: "作業指示番号", kind: "code" },
   { id: "part_no", label: "品番", kind: "code" },
   { id: "process_code", label: "工程コード", kind: "code" },
   { id: "shift_name", label: "シフト", kind: "shift" },
@@ -145,189 +144,64 @@ export const COLUMNS: ColumnSpec[] = [
   { id: "longitude", label: "経度", kind: "latlng" },
   { id: "hazmat_class", label: "危険物区分", kind: "status" },
   { id: "permit_no", label: "許認可番号", kind: "code" },
-];
+] as const satisfies readonly ColumnSpec[];
 
 export const COL_COUNT = COLUMNS.length;
 
-const DEPTS = [
-  "成形課",
-  "組立課",
-  "加工課",
-  "検査課",
-  "保全課",
-  "動力課",
-  "倉庫課",
-  "品質保証",
-] as const;
+export type ColumnId = (typeof COLUMNS)[number]["id"];
 
-const NAMES = [
-  "佐藤",
-  "鈴木",
-  "高橋",
-  "田中",
-  "伊藤",
-  "渡辺",
-  "山本",
-  "中村",
-  "小林",
-  "加藤",
-] as const;
-
-const VENDORS = [
-  "東洋メンテ",
-  "日機装サービス",
-  "三和保全工業",
-  "中部テクノ",
-  "北陸プラント",
-] as const;
-
-const PREFS = [
-  "愛知",
-  "岐阜",
-  "三重",
-  "静岡",
-  "長野",
-  "滋賀",
-  "大阪",
-  "兵庫",
-] as const;
-
-const STATUSES = ["運転中", "停止", "保全中", "異常", "待機", "段取り中"] as const;
-const ALARMS = ["—", "注意", "軽故障", "重故障"] as const;
-const SHIFTS = ["未割当", "早番", "中番", "夜番", "昼夜"] as const;
-const TOWER = ["緑", "黄", "赤", "点滅", "消灯"] as const;
-const MODES = ["AUTO", "MANUAL", "JOG", "MAINT", "REMOTE"] as const;
-const DATA_SOURCES = ["SCADA", "MES", "手入力", "バッチ取込", "API"] as const;
-const API_STATES = ["同期済", "遅延", "切断", "再送中"] as const;
-const EXP_CLASSES = ["非防爆", "Ex d", "Ex e", "Ex n"] as const;
-
-/** 擬似乱数（再現可能なデモ用） */
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export type Row = { [K in ColumnId]: string };
 
 function pad(n: number, w: number) {
   return String(n).padStart(w, "0");
 }
 
-const EQUIPMENT_NAMES = [
-  "射出成形機 #3",
-  "ライン用チラー A",
-  "搬送コンベア B",
-  "外観検査機",
-  "溶接ロボット",
-  "AGV充電ステーション",
-] as const;
-
-function formatDate(baseDay: number): string {
-  const d = new Date(Date.UTC(2019, 0, 1) + baseDay * 86400000);
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1, 2)}-${pad(d.getUTCDate(), 2)}`;
+/** 行 i・列・seed から数値系セル用のベース整数（20 + i + 列 + seed） */
+function numBase(i: number, colIndex: number, seed: number) {
+  return 20 + i + colIndex + seed;
 }
 
-function formatDateTime(baseMin: number): string {
-  const ms = Date.UTC(2024, 0, 1, 6, 0) + baseMin * 60000;
-  const d = new Date(ms);
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1, 2)}-${pad(d.getUTCDate(), 2)} ${pad(d.getUTCHours(), 2)}:${pad(d.getUTCMinutes(), 2)}`;
-}
-
-function cellValue(
-  row: number,
-  colIndex: number,
-  spec: ColumnSpec,
-  rand: () => number,
-  seed: number,
-): string {
-  const r = row + 1;
+/**
+ * 1 セル分。文字列系は `ラベル-${i}` / `Name ${i}` / `Country-${i}` など、数値系は 20+i 系を文字列化。
+ */
+function cellValue(i: number, colIndex: number, spec: ColumnSpec, seed: number): string {
   const c = colIndex;
-  const pick = <T,>(arr: readonly T[]) => arr[(row + colIndex) % arr.length]!;
-  const rnd = () => rand();
+  const base = numBase(i, c, seed);
 
   switch (spec.kind) {
-    case "equipId":
-      return `EQ-${pad((10000 + (row * 17 + c * 3)) % 90000, 5)}`;
-    case "assetNo":
-      return `AST-2023-${pad((row * 11 + c) % 100000, 5)}`;
-    case "serial":
-      return `SN${pad((row + 1) % 1000, 3)}-${pad((8888 + row * 13) % 10000, 4)}`;
-    case "model":
-      if (spec.id === "equipment_name") return pick(EQUIPMENT_NAMES);
-      if (spec.id === "edge_fw_version")
-        return `${2 + (row % 3)}.${(row % 24) + 1}.${(colIndex % 18) + 1}`;
-      return pick(["VXT-2000", "MP-45X", "FX9-Lite", "ZR-Module", "HL-Compact", "NeoDrive"]);
-    case "code":
-      return `${spec.id.slice(0, 3).toUpperCase()}-${pad((row * 31 + c * 7) % 1000000, 6)}`;
-    case "date":
-      return formatDate((row * 19 + c * 5) % 2200);
-    case "datetime":
-      return formatDateTime((row * 97 + c * 11) % 500000);
-    case "dept":
-      return pick(DEPTS);
-    case "person":
-      if (spec.id.endsWith("_id"))
-        return `USR-${pad((5000 + row + colIndex * 17) % 9000, 4)}`;
-      return `${pick(NAMES)}${(row % 9) + 1}${["", "郎", "子"][(row + colIndex) % 3]}`;
-    case "vendor":
-      return pick(VENDORS);
-    case "amount":
-      return ((row * 137 + c * 19) % 500000 / 100).toFixed(2);
     case "int":
-      return String((row * 23 + c * 41 + 100) % 100000);
+      return String(base % 100000);
+    case "amount":
+      return ((base % 500000) / 100).toFixed(2);
     case "decimal1":
-      return (5 + rnd() * 120 + (row % 17) * 0.1).toFixed(1);
+      return (base * 0.1).toFixed(1);
     case "pct":
-      return `${(row * 3 + c * 7) % 101}%`;
+      return `${base % 101}%`;
     case "bool":
-      return (row + colIndex) % 5 === 0 ? "NG" : "OK";
-    case "pref":
-      return spec.id === "country" ? "日本" : pick(PREFS);
-    case "postal":
-      return `${pad((100 + row) % 900 + 100, 3)}-${pad((4000 + row * 3) % 10000, 4)}`;
-    case "address":
-      return `${pick(PREFS)}市${["北", "南", "東", "西"][(row + c) % 4]}区${(row % 40) + 1}-${(c % 15) + 1}`;
+      return (i + c + seed) % 2 === 0 ? "OK" : "NG";
+    case "date":
+      return `date-${i}-${c}`;
+    case "datetime":
+      return `dt-${i}-${pad(c, 2)}`;
     case "latlng":
       return spec.id === "latitude"
-        ? (35.0 + (row % 200) * 0.01).toFixed(4)
+        ? (35.0 + (i % 200) * 0.01).toFixed(4)
         : (137.0 + (c % 180) * 0.01).toFixed(4);
-    case "tel":
-      return `052-${pad((2000 + row) % 8000, 4)}-${pad((1000 + c * 17) % 9000, 4)}`;
-    case "email":
-      return `plant-${pad((row % 500) + 1, 3)}@example.co.jp`;
-    case "shift":
-      return pick(SHIFTS);
-    case "mode":
-      return pick(MODES);
-    case "status":
-      if (spec.id === "explosion_class") return pick(EXP_CLASSES);
-      if (spec.id === "tower_lamp") return pick(TOWER);
-      if (spec.id === "current_mode") return pick(MODES);
-      if (spec.id === "data_source") return pick(DATA_SOURCES);
-      if (spec.id === "api_link_state") return pick(API_STATES);
-      if (spec.id === "hazmat_class") return ["該当なし", "第4類", "第5類", "高圧ガス"][(row + c) % 4]!;
-      return pick(STATUSES);
-    case "alarm":
-      return pick(ALARMS);
-    case "uuid":
-      return `IMP-${formatDate((row * 13 + colIndex * 41 + seed) % 800)}-${pad(r, 5)}-${pad(c, 2)}`;
+    case "pref":
+      return spec.id === "country" ? `Country-${i}` : `Pref-${i}`;
+    case "person":
+      return spec.id.endsWith("_id") ? `USR-${pad((base % 9000) + 1000, 4)}` : `Name ${i}`;
     default:
-      return "—";
+      if (spec.id === "equipment_name" || spec.id === "model_name") return `Name ${i}`;
+      return `${spec.label}-${i}`;
   }
 }
 
-/** 5000×100 のセル（項目定義に沿ったありえそうな値） */
+/** 5000×100。各行は列 id → セル文字列の Row。 */
 export function buildGrid(seed = 42): Row[] {
-  const rows: Row[] = [];
-  for (let r = 0; r < ROW_COUNT; r++) {
-    const rand = mulberry32(seed + r * 10007);
-    const row: string[] = [];
-    for (let c = 0; c < COL_COUNT; c++) {
-      row.push(cellValue(r, c, COLUMNS[c]!, rand, seed));
-    }
-    rows.push(row);
-  }
-  return rows;
+  return Array.from({ length: ROW_COUNT }, (_, row) =>
+    Object.fromEntries(
+      COLUMNS.map((spec, col) => [spec.id, cellValue(row, col, spec, seed)] as const),
+    ) as Row,
+  );
 }
