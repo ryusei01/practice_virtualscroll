@@ -204,4 +204,4 @@ export function buildGrid(seed = 42): Row[] {
       COLUMNS.map((spec, col) => [spec.id, cellValue(row, col, spec, seed)] as const),
     ) as Row,
   );
-}
+     }
