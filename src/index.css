@@ -1,0 +1,10 @@
+/* CssBaseline がベースを整える。仮想表は独自 CSS のみ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}
