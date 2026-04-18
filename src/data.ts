@@ -1,11 +1,11 @@
 /**
- * 仮想スクロール表向けデモ用グリッド（5000行 × 100 列）。
- * セルは「固定のベース文字列 + 行インデックス i」または 20+i 系の数値文字列。
+ * Demo grid data for a virtualized table (ROW_COUNT rows x COL_COUNT columns).
+ * Values are deterministic: `int` columns are numbers; others are mostly strings (`${label}-${row}`, etc.).
  */
-/** データ行数。列数は COL_COUNT（COLUMNS.length） */
+/** Total data rows; column count is COL_COUNT (= COLUMNS.length). */
 export const ROW_COUNT = 5000;
 
-/** cellValue の switch で参照する値の系統 */
+/** Discriminator for how `cellValue` formats a cell for a column. */
 export type ColumnKind =
   | "equipId"
   | "assetNo"
@@ -34,6 +34,7 @@ export type ColumnKind =
   | "alarm"
   | "uuid";
 
+/** Metadata for one column: stable `id` (Row key), header `label`, and generation `kind`. */
 export type ColumnSpec = {
   id: string;
   label: string;
@@ -41,7 +42,8 @@ export type ColumnSpec = {
 };
 
 /**
- * 100 項目の列定義（ヘッダ表示用ラベルと kind のみ使用。セル値は cellValue で統一ルール生成）。
+ * All column definitions in visual order (must match virtual column index).
+ * `as const satisfies` keeps literal `id` types and still checks against ColumnSpec.
  */
 export const COLUMNS = [
   { id: "equipment_mgmt_no", label: "設備管理番号", kind: "equipId" },
@@ -146,31 +148,45 @@ export const COLUMNS = [
   { id: "permit_no", label: "許認可番号", kind: "code" },
 ] as const satisfies readonly ColumnSpec[];
 
+/** Column count passed to the horizontal virtualizer. */
 export const COL_COUNT = COLUMNS.length;
 
+/** Union of every column `id` literal from COLUMNS. */
 export type ColumnId = (typeof COLUMNS)[number]["id"];
 
-export type Row = { [K in ColumnId]: string };
+type ColumnEntry = (typeof COLUMNS)[number];
+/** `kind` for a given column id (from the COLUMNS table). */
+type KindForId<I extends ColumnId> = Extract<ColumnEntry, { id: I }>["kind"];
 
+/**
+ * One grid row: column id → value.
+ * Columns with `kind: "int"` in COLUMNS are typed as `number`; everything else stays `string`.
+ */
+export type Row = {
+  [K in ColumnId]: KindForId<K> extends "int" ? number : string;
+};
+
+/** Left-pad a number to width `w` (e.g. dates, codes). */
 function pad(n: number, w: number) {
   return String(n).padStart(w, "0");
 }
 
-/** 行 i・列・seed から数値系セル用のベース整数（20 + i + 列 + seed） */
+/** Deterministic base integer for numeric-ish cells from row, column, and grid seed. */
 function numBase(i: number, colIndex: number, seed: number) {
   return 20 + i + colIndex + seed;
 }
 
 /**
- * 1 セル分。文字列系は `ラベル-${i}` / `Name ${i}` / `Country-${i}` など、数値系は 20+i 系を文字列化。
+ * Build one demo cell for (`row`, `colIndex`, `spec`).
+ * `kind: "int"` returns a number (matches `Row`); all other kinds return strings for display.
  */
-function cellValue(i: number, colIndex: number, spec: ColumnSpec, seed: number): string {
+function cellValue(i: number, colIndex: number, spec: ColumnSpec, seed: number): string | number {
   const c = colIndex;
   const base = numBase(i, c, seed);
 
   switch (spec.kind) {
     case "int":
-      return String(base % 100000);
+      return base % 100000;
     case "amount":
       return ((base % 500000) / 100).toFixed(2);
     case "decimal1":
@@ -179,29 +195,36 @@ function cellValue(i: number, colIndex: number, spec: ColumnSpec, seed: number):
       return `${base % 101}%`;
     case "bool":
       return (i + c + seed) % 2 === 0 ? "OK" : "NG";
+    // Short demo date/time tokens (not locale-formatted)
     case "date":
       return `date-${i}-${c}`;
     case "datetime":
       return `dt-${i}-${pad(c, 2)}`;
+    // Fixed fake lat/lng strings
     case "latlng":
       return spec.id === "latitude"
         ? (35.0 + (i % 200) * 0.01).toFixed(4)
         : (137.0 + (c % 180) * 0.01).toFixed(4);
     case "pref":
       return spec.id === "country" ? `Country-${i}` : `Pref-${i}`;
+    // User id vs display name pattern
     case "person":
       return spec.id.endsWith("_id") ? `USR-${pad((base % 9000) + 1000, 4)}` : `Name ${i}`;
     default:
+      // Every other kind: label + row, with two name columns special-cased
       if (spec.id === "equipment_name" || spec.id === "model_name") return `Name ${i}`;
       return `${spec.label}-${i}`;
   }
 }
 
-/** 5000×100。各行は列 id → セル文字列の Row。 */
+/**
+ * Build ROW_COUNT rows; each row is a `Row` (int columns are numbers, rest strings).
+ * @param seed Passed into `numBase` / `cellValue` so the grid can be regenerated.
+ */
 export function buildGrid(seed = 42): Row[] {
   return Array.from({ length: ROW_COUNT }, (_, row) =>
     Object.fromEntries(
       COLUMNS.map((spec, col) => [spec.id, cellValue(row, col, spec, seed)] as const),
     ) as Row,
   );
-     }
+}

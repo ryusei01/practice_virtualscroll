@@ -13,6 +13,7 @@ import { buildGrid, COL_COUNT, ROW_COUNT } from "./data";
 import { VirtualDataTable } from "./VirtualDataTable";
 
 export default function App() {
+  /** Bump to change `buildGrid` seed and replace the in-memory grid. */
   const [seed, setSeed] = useState(0);
   const rows = useMemo(() => buildGrid(42 + seed), [seed]);
 
