@@ -1,7 +1,7 @@
 .vt-wrap {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  overflow: hidden;
+  /* overflow: hidden は子の position:sticky を壊すことがある（スクロールは .vt-scroll 側） */
   background: #fff;
   box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
 }
@@ -10,6 +10,7 @@
   height: min(70vh, 640px);
   overflow: auto;
   position: relative;
+  border-radius: 8px;
 }
 
 .vt-stack {
@@ -17,12 +18,13 @@
 }
 
 .vt-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   border-bottom: 1px solid #cbd5e1;
   flex-shrink: 0;
-}
-
-.vt-body {
-  contain: layout style;
+  /* 縦スクロールで中身がヘッダー下に見えないよう全面を不透明に */
+  background: #e2e8f0;
 }
 
 .vt-cell {

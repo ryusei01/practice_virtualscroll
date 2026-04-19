@@ -16,9 +16,14 @@ function colCell(vc: VirtualItem, height: number): CSSProperties {
   return { position: "absolute", left: vc.start, width: vc.size, height };
 }
 
-/** Wrapper size for a header strip or the scrollable body area. */
-function gridLayer(width: number, height: number): CSSProperties {
-  return { position: "relative", width, height };
+/** Header: width/height only (CSS `sticky`). Body: add `relative` for absolute rows/cells. */
+function gridLayer(
+  width: number,
+  height: number,
+  opts?: { position: "relative" }
+): CSSProperties {
+  const base = { width, height };
+  return opts?.position === "relative" ? { ...base, position: "relative" } : base;
 }
 
 /**
@@ -56,7 +61,7 @@ export function VirtualDataTable({ rows }: Props) {
     <div className="vt-wrap">
       <div ref={scrollRef} className="vt-scroll">
         <div className="vt-stack">
-          {/* Sticky header: same horizontal offsets as body cells */}
+          {/* Sticky header row (CSS); horizontal layout matches body via colsV */}
           <div className="vt-header-row" style={gridLayer(gridWidth, ROW_H)}>
             {virtualCols.map((vc) => (
               <div key={vc.key} className="vt-cell vt-header-cell" style={colCell(vc, ROW_H)}>
@@ -67,7 +72,7 @@ export function VirtualDataTable({ rows }: Props) {
             ))}
           </div>
 
-          <div className="vt-body" style={gridLayer(gridWidth, bodyHeight)}>
+          <div className="vt-body" style={gridLayer(gridWidth, bodyHeight, { position: "relative" })}>
             {virtualRows.map((vr) => (
               <div
                 key={vr.key}
